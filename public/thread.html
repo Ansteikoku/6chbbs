@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>スレッド</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase.js"></script>
+<script type="module" src="hstorage.js"></script>
+</head>
+<body>
+
+<div class="thread-wrapper">
+<h1 id="threadTitle">スレッドタイトル</h1>
+<div id="postArea"></div>
+<hr>
+<div class="post-form">
+<textarea id="postContent" placeholder="本文"></textarea><br><br>
+<input id="postEmail" type="text" placeholder="メール欄"><br><br>
+<input id="postImage" type="file" accept="image/*"><br><br>
+<button id="postBtn">投稿</button>
+</div>
+</div>
+
+<script type="module">
+import { uploadFile } from './hstorage.js';
+const threadId=new URLSearchParams(window.location.search).get("id");
+
+async function loadPosts(){
+    const box=document.getElementById("postArea");
+    const { data: posts } = await sb.from("posts").select("*").eq("thread_id",threadId).order("post_number",{ascending:true});
+    box.innerHTML="";
+    posts.forEach(p=>{
+        const date=new Date(p.created_at);
+        box.innerHTML+=`
+        <div class="res-item" id="res-${p.post_number}">
+            <div class="res-meta">${p.post_number}：${p.name}：${date.toLocaleString()}：ID:${p.session_id}</div>
+            <div class="res-body">${p.content}</div>
+            ${p.image_url?`<img src="${p.image_url}" class="res-image">`:""}
+        </div><hr>`;
+    });
+}
+
+document.getElementById("postBtn").addEventListener("click", async ()=>{
+    const content=document.getElementById("postContent").value.trim();
+    const email=document.getElementById("postEmail").value.trim();
+    const file=document.getElementById("postImage").files[0];
+    const isSage=email.toLowerCase()==="sage";
+    if(!content && !file) return alert("本文か画像を入力してください");
+
+    let imageUrl=null;
+    if(file) imageUrl=await uploadFile(file);
+
+    await fetch("/api/post-reply", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ threadId, content, email, imageUrl, isSage })
+    });
+
+    document.getElementById("postContent").value="";
+    document.getElementById("postEmail").value="";
+    document.getElementById("postImage").value="";
+
+    loadPosts();
+});
+
+loadPosts();
+setInterval(loadPosts,5000);
+</script>
+</body>
+</html>
